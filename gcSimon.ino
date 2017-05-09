@@ -1,37 +1,45 @@
+#include <Arduino.h>
+#include <U8g2lib.h>
+#include <math.h>
+#include <Servo.h>
+
 /*
- SparkFun Inventor's Kit
- Example sketch 16
- Spark Fun Electronics
- Oct. 7, 2014
+  SparkFun Inventor's Kit
+  Example sketch 16
+  Spark Fun Electronics
+  Oct. 7, 2014
 
- Simon Says is a memory game. Start the game by pressing one of the four buttons. When a button lights up,
- press the button, repeating the sequence. The sequence will get longer and longer. The game is won after
- 13 rounds.
+  Simon Says is a memory game. Start the game by pressing one of the four buttons. When a button lights up,
+  press the button, repeating the sequence. The sequence will get longer and longer. The game is won after
+  13 rounds.
 
- Generates random sequence, plays music, and displays button lights.
+  Generates random sequence, plays music, and displays button lights.
 
- Simon tones from Wikipedia
- - A (red, upper left) - 440Hz - 2.272ms - 1.136ms pulse
- - a (green, upper right, an octave higher than A) - 880Hz - 1.136ms,
- 0.568ms pulse
- - D (blue, lower left, a perfect fourth higher than the upper left)
- 587.33Hz - 1.702ms - 0.851ms pulse
- - G (yellow, lower right, a perfect fourth higher than the lower left) -
- 784Hz - 1.276ms - 0.638ms pulse
+  Simon tones from Wikipedia
+  - A (red, upper left) - 440Hz - 2.272ms - 1.136ms pulse
+  - a (green, upper right, an octave higher than A) - 880Hz - 1.136ms,
+  0.568ms pulse
+  - D (blue, lower left, a perfect fourth higher than the upper left)
+  587.33Hz - 1.702ms - 0.851ms pulse
+  - G (yellow, lower right, a perfect fourth higher than the lower left) -
+  784Hz - 1.276ms - 0.638ms pulse
 
- Simon Says game originally written in C for the PIC16F88.
- Ported for the ATmega168, then ATmega328, then Arduino 1.0.
- Fixes and cleanup by Joshua Neal <joshua[at]trochotron.com>
+  Simon Says game originally written in C for the PIC16F88.
+  Ported for the ATmega168, then ATmega328, then Arduino 1.0.
+  Fixes and cleanup by Joshua Neal <joshua[at]trochotron.com>
 
- This sketch was written by SparkFun Electronics,
- with lots of help from the Arduino community.
- This code is completely free for any use.
- Visit http://www.arduino.cc to learn about the Arduino.
- */
+  This sketch was written by SparkFun Electronics,
+  with lots of help from the Arduino community.
+  This code is completely free for any use.
+  Visit http://www.arduino.cc to learn about the Arduino.
+*/
 
 /*************************************************
-* Public Constants
+  Public Constants
 *************************************************/
+U8G2_SSD1306_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, /* clock=*/ SCL, /* data=*/ SDA, /* reset=*/ U8X8_PIN_NONE);   // All Boards without Reset of the Display
+
+
 #define NOTE_B0 31
 #define NOTE_C1 33
 #define NOTE_CS1 35
@@ -129,20 +137,20 @@
 #define CHOICE_BLUE (1 << 2)
 #define CHOICE_YELLOW   (1 << 3)
 
-#define LED_RED     10
-#define LED_GREEN   3
-#define LED_BLUE    13
-#define LED_YELLOW  5
+#define LED_RED     8  //10
+#define LED_GREEN   9  //3
+#define LED_BLUE    10 //13
+#define LED_YELLOW  11 //5
 
 // Button pin definitions
-#define BUTTON_RED    9
-#define BUTTON_GREEN  2
-#define BUTTON_BLUE   12
+#define BUTTON_RED    3 //9
+#define BUTTON_GREEN  4 //2
+#define BUTTON_BLUE   5 //12
 #define BUTTON_YELLOW 6
 
 // Buzzer pin definitions
-#define BUZZER1  4
-#define BUZZER2  7
+#define BUZZER1 12 //4
+#define BUZZER2  7 //7
 
 // Define game parameters
 #define ROUNDS_TO_WIN      13 //Number of rounds to succesfully remember before you win. 13 is do-able.
@@ -152,14 +160,42 @@
 #define MODE_BATTLE  1
 #define MODE_BEEGEES 2
 
+#define FONT_TITLE u8g2_font_9x15_tf
+#define FONT_BODY u8g2_font_6x13_tf
+#define FONT_HUGE u8g2_font_courB24_tf
+
+#define GAME_TIMED_OUT -1
+#define GAME_WRONG_MOVE 0
+#define GAME_WIN 1
+
 // Game state variables
 byte gameMode = MODE_MEMORY; //By default, let's play the memory game
 byte gameBoard[32]; //Contains the combination of buttons as we advance
 byte gameRound = 0; //Counts the number of succesful rounds the player has made it through
 
+Servo myservo;
+
 void setup()
 {
+  Serial.begin(9600);
+
+  int pos = 0;
+  myservo.attach(A0);
+  for (pos = 10; pos <= 170; pos += 1) { // goes from 0 degrees to 180 degrees
+    // in steps of 1 degree
+    myservo.write(pos);              // tell servo to go to position in variable 'pos'
+    delay(15);                       // waits 15ms for the servo to reach the position
+  }
+  for (pos = 170; pos >= 10; pos -= 1) { // goes from 180 degrees to 0 degrees
+    myservo.write(pos);              // tell servo to go to position in variable 'pos'
+    delay(15);                       // waits 15ms for the servo to reach the position
+  }
+  myservo.write(90);
+  delay(100);
+  myservo.detach();
+
   //Setup hardware inputs/outputs. These pins are defined in the hardware_versions header file
+  u8g2.begin(BUTTON_RED, BUTTON_GREEN, BUTTON_BLUE, BUTTON_YELLOW);
 
   //Enable pull ups on inputs
   pinMode(BUTTON_RED, INPUT_PULLUP);
@@ -192,7 +228,7 @@ void setup()
 
     setLEDs(CHOICE_RED | CHOICE_BLUE | CHOICE_YELLOW); // Turn on the other LEDs until you release button
 
-    while(checkButton() != CHOICE_NONE) ; // Wait for user to stop pressing button
+    while (checkButton() != CHOICE_NONE) ; // Wait for user to stop pressing button
 
     //Now do nothing. Battle mode will be serviced in the main routine
   }
@@ -210,20 +246,26 @@ void loop()
   setLEDs(CHOICE_OFF); // Turn off LEDs
   delay(250);
 
+
+  instructions_memory();
+
+
   if (gameMode == MODE_MEMORY)
   {
     // Play memory game and handle result
-    if (play_memory() == true)
+    byte result = play_memory();
+
+    if (result == GAME_WIN)
       play_winner(); // Player won, play winner tones
     else
-      play_loser(); // Player lost, play loser tones
+      play_loser(result); // Player lost, play loser tones
   }
 
   if (gameMode == MODE_BATTLE)
   {
     play_battle(); // Play game until someone loses
 
-    play_loser(); // Player lost, play loser tones
+    play_loser(GAME_WRONG_MOVE); // Player lost, play loser tones
   }
 }
 
@@ -232,7 +274,82 @@ void loop()
 
 // Play the regular memory game
 // Returns 0 if player loses, or 1 if player wins
-boolean play_memory(void)
+
+void printRound(byte gameRound)
+{
+  u8g2.firstPage();
+  do {
+    u8g2.setFont(FONT_HUGE);
+    center(gameRound);
+  } while (u8g2.nextPage());
+
+}
+
+void print_winner()
+{
+  u8g2.firstPage();
+  do {
+    u8g2.setFont(FONT_HUGE);
+    u8g2.setFontPosCenter();
+    center("HURRA!", 32);
+  } while (u8g2.nextPage());
+}
+
+void print_loser(byte reason)
+{
+  u8g2.firstPage();
+  do {
+    u8g2.setFont(FONT_HUGE);
+    u8g2.setFontPosCenter();
+    if (reason == GAME_WRONG_MOVE) {
+      center("Wrong move!", 32);
+    } else {
+      center("To Slow!", 32);
+    }
+
+  } while (u8g2.nextPage());
+}
+
+void instructions_memory()
+{
+
+  u8g2.firstPage();
+  do {
+    u8g2.setFont(FONT_TITLE);
+    center("- Instructions: -", 12);
+    u8g2.setFont(FONT_BODY);
+    center("Repeat shown sequence", 30);
+  } while (u8g2.nextPage());
+
+  delay(ENTRY_TIME_LIMIT);
+
+  u8g2.firstPage();
+  do {
+    u8g2.setFont(FONT_TITLE);
+    center("- Instructions: -", 12);
+    u8g2.setFont(FONT_BODY);
+    center("Wait no longer than", 30);
+    center("3 sec", 45);
+  } while (u8g2.nextPage());
+
+  delay(ENTRY_TIME_LIMIT);
+
+char buf[20];
+snprintf (buf, 20, "Manage %d in a row", ROUNDS_TO_WIN);
+
+  u8g2.firstPage();
+  do {
+    u8g2.setFont(FONT_TITLE);
+    center("- Instructions: -", 12);
+    u8g2.setFont(FONT_BODY);
+    center(buf, 30);
+    center("to win.", 45);
+  } while (u8g2.nextPage());
+
+  delay(ENTRY_TIME_LIMIT);
+}
+
+byte play_memory(void)
 {
   randomSeed(millis()); // Seed the random generator with random amount of millis()
 
@@ -240,6 +357,8 @@ boolean play_memory(void)
 
   while (gameRound < ROUNDS_TO_WIN)
   {
+    printRound(gameRound + 1);
+
     add_to_moves(); // Add a button to the current moves, then play them back
 
     playMoves(); // Play back the current game board
@@ -249,15 +368,15 @@ boolean play_memory(void)
     {
       byte choice = wait_for_button(); // See what button the user presses
 
-      if (choice == 0) return false; // If wait timed out, player loses
+      if (choice == 0) return GAME_TIMED_OUT; // If wait timed out, player loses
 
-      if (choice != gameBoard[currentMove]) return false; // If the choice is incorect, player loses
+      if (choice != gameBoard[currentMove]) return GAME_WRONG_MOVE; // If the choice is incorect, player loses
     }
 
     delay(1000); // Player was correct, delay before playing moves
   }
 
-  return true; // Player made it through all the rounds to win!
+  return GAME_WIN; // Player made it through all the rounds to win!
 }
 
 // Play the special 2 player battle mode
@@ -308,10 +427,10 @@ void add_to_moves(void)
   byte newButton = random(0, 4); //min (included), max (exluded)
 
   // We have to convert this number, 0 to 3, to CHOICEs
-  if(newButton == 0) newButton = CHOICE_RED;
-  else if(newButton == 1) newButton = CHOICE_GREEN;
-  else if(newButton == 2) newButton = CHOICE_BLUE;
-  else if(newButton == 3) newButton = CHOICE_YELLOW;
+  if (newButton == 0) newButton = CHOICE_RED;
+  else if (newButton == 1) newButton = CHOICE_GREEN;
+  else if (newButton == 2) newButton = CHOICE_BLUE;
+  else if (newButton == 3) newButton = CHOICE_YELLOW;
 
   gameBoard[gameRound++] = newButton; // Add this new button to the game array
 }
@@ -358,7 +477,7 @@ byte wait_for_button(void)
     {
       toner(button, 150); // Play the button the user just pressed
 
-      while(checkButton() != CHOICE_NONE) ;  // Now let's wait for user to release button
+      while (checkButton() != CHOICE_NONE) ; // Now let's wait for user to release button
 
       delay(10); // This helps with debouncing and accidental double taps
 
@@ -373,12 +492,12 @@ byte wait_for_button(void)
 // Returns a '1' bit in the position corresponding to CHOICE_RED, CHOICE_GREEN, etc.
 byte checkButton(void)
 {
-  if (digitalRead(BUTTON_RED) == 0) return(CHOICE_RED);
-  else if (digitalRead(BUTTON_GREEN) == 0) return(CHOICE_GREEN);
-  else if (digitalRead(BUTTON_BLUE) == 0) return(CHOICE_BLUE);
-  else if (digitalRead(BUTTON_YELLOW) == 0) return(CHOICE_YELLOW);
+  if (digitalRead(BUTTON_RED) == 0) return (CHOICE_RED);
+  else if (digitalRead(BUTTON_GREEN) == 0) return (CHOICE_GREEN);
+  else if (digitalRead(BUTTON_BLUE) == 0) return (CHOICE_BLUE);
+  else if (digitalRead(BUTTON_YELLOW) == 0) return (CHOICE_YELLOW);
 
-  return(CHOICE_NONE); // If no button is pressed, return none
+  return (CHOICE_NONE); // If no button is pressed, return none
 }
 
 // Light an LED and play tone
@@ -391,20 +510,20 @@ void toner(byte which, int buzz_length_ms)
   setLEDs(which); //Turn on a given LED
 
   //Play the sound associated with the given LED
-  switch(which)
+  switch (which)
   {
-  case CHOICE_RED:
-    buzz_sound(buzz_length_ms, 1136);
-    break;
-  case CHOICE_GREEN:
-    buzz_sound(buzz_length_ms, 568);
-    break;
-  case CHOICE_BLUE:
-    buzz_sound(buzz_length_ms, 851);
-    break;
-  case CHOICE_YELLOW:
-    buzz_sound(buzz_length_ms, 638);
-    break;
+    case CHOICE_RED:
+      buzz_sound(buzz_length_ms, 1136);
+      break;
+    case CHOICE_GREEN:
+      buzz_sound(buzz_length_ms, 568);
+      break;
+    case CHOICE_BLUE:
+      buzz_sound(buzz_length_ms, 851);
+      break;
+    case CHOICE_YELLOW:
+      buzz_sound(buzz_length_ms, 638);
+      break;
   }
 
   setLEDs(CHOICE_OFF); // Turn off all LEDs
@@ -435,6 +554,8 @@ void buzz_sound(int buzz_length_ms, int buzz_delay_us)
 // Play the winner sound and lights
 void play_winner(void)
 {
+  print_winner();
+
   setLEDs(CHOICE_GREEN | CHOICE_BLUE);
   winner_sound();
   setLEDs(CHOICE_RED | CHOICE_YELLOW);
@@ -466,8 +587,10 @@ void winner_sound(void)
 }
 
 // Play the loser sound/lights
-void play_loser(void)
+void play_loser(byte reason)
 {
+  print_loser(reason);
+
   setLEDs(CHOICE_RED | CHOICE_GREEN);
   buzz_sound(255, 1500);
 
@@ -481,10 +604,39 @@ void play_loser(void)
   buzz_sound(255, 1500);
 }
 
+void center(const char *s, uint8_t y)
+{
+  uint8_t i = u8g2.getStrWidth(s);
+
+  u8g2.setCursor((128 - i) / 2, y);
+  u8g2.print(s);
+}
+
+void center(const byte value)
+{
+  uint8_t x = u8g2.getStrWidth("8") * ((int)log10(value)+1);
+
+  u8g2.setFontPosCenter();
+  u8g2.setCursor((128 - x) / 2, 32);
+  u8g2.print(value);
+}
+
+
 // Show an "attract mode" display while waiting for user to press button.
 void attractMode(void)
 {
-  while(1)
+
+  u8g2.firstPage();
+  do {
+    u8g2.setFont(FONT_TITLE);
+    center("-= SiMoN =-", 12);
+
+    u8g2.setFont(FONT_BODY);
+    center("Push any button", 60);
+  } while (u8g2.nextPage());
+
+
+  while (1)
   {
     setLEDs(CHOICE_RED);
     delay(100);
@@ -512,7 +664,8 @@ int melody[] = {
   NOTE_G4, NOTE_A4, 0, NOTE_C5, 0, 0, NOTE_G4, 0, 0, 0,
   NOTE_E4, 0, NOTE_D4, NOTE_E4, NOTE_G4, 0,
   NOTE_D4, NOTE_E4, 0, NOTE_G4, 0, 0,
-  NOTE_D4, 0, NOTE_E4, 0, NOTE_G4, 0, NOTE_A4, 0, NOTE_C5, 0};
+  NOTE_D4, 0, NOTE_E4, 0, NOTE_G4, 0, NOTE_A4, 0, NOTE_C5, 0
+};
 
 int noteDuration = 115; // This essentially sets the tempo, 115 is just about right for a disco groove :)
 int LEDnumber = 0; // Keeps track of which LED we are on during the beegees loop
@@ -527,7 +680,7 @@ void play_beegees()
 
   setLEDs(CHOICE_RED | CHOICE_GREEN | CHOICE_BLUE); // Turn on the other LEDs until you release button
 
-  while(checkButton() != CHOICE_NONE) ; // Wait for user to stop pressing button
+  while (checkButton() != CHOICE_NONE) ; // Wait for user to stop pressing button
 
   setLEDs(CHOICE_NONE); // Turn off LEDs
 
@@ -535,12 +688,12 @@ void play_beegees()
 
   digitalWrite(BUZZER1, LOW); // setup the "BUZZER1" side of the buzzer to stay low, while we play the tone on the other pin.
 
-  while(checkButton() == CHOICE_NONE) //Play song until you press a button
+  while (checkButton() == CHOICE_NONE) //Play song until you press a button
   {
     // iterate over the notes of the melody:
     for (int thisNote = 0; thisNote < 32; thisNote++) {
       changeLED();
-      tone(BUZZER2, melody[thisNote],noteDuration);
+      tone(BUZZER2, melody[thisNote], noteDuration);
       // to distinguish the notes, set a minimum time between them.
       // the note's duration + 30% seems to work well:
       int pauseBetweenNotes = noteDuration * 1.30;
@@ -557,5 +710,5 @@ void changeLED(void)
   setLEDs(1 << LEDnumber); // Change the LED
 
   LEDnumber++; // Goto the next LED
-  if(LEDnumber > 3) LEDnumber = 0; // Wrap the counter if needed
+  if (LEDnumber > 3) LEDnumber = 0; // Wrap the counter if needed
 }
