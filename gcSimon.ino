@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include <U8g2lib.h>
-#include <math.h>
+#include <math.h> 
 #include <Servo.h>
 
 /*
@@ -160,10 +160,6 @@ U8G2_SSD1306_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, /* clock=*/ SCL, /* data=*/ SD
 #define MODE_BATTLE  1
 #define MODE_BEEGEES 2
 
-#define FONT_TITLE u8g2_font_9x15_tf
-#define FONT_BODY u8g2_font_6x13_tf
-#define FONT_HUGE u8g2_font_courB24_tf
-
 #define GAME_TIMED_OUT -1
 #define GAME_WRONG_MOVE 0
 #define GAME_WIN 1
@@ -191,9 +187,9 @@ void setup()
     delay(15);                       // waits 15ms for the servo to reach the position
   }
   myservo.write(90);
-  delay(100);
+  delay(100); 
   myservo.detach();
-
+  
   //Setup hardware inputs/outputs. These pins are defined in the hardware_versions header file
   u8g2.begin(BUTTON_RED, BUTTON_GREEN, BUTTON_BLUE, BUTTON_YELLOW);
 
@@ -213,6 +209,10 @@ void setup()
 
   //Mode checking
   gameMode = MODE_MEMORY; // By default, we're going to play the memory game
+
+// Check to see if the lower right button is pressed
+  if (checkButton() == CHOICE_RED) render_screens();
+
 
   // Check to see if the lower right button is pressed
   if (checkButton() == CHOICE_YELLOW) play_beegees();
@@ -239,7 +239,7 @@ void setup()
 void loop()
 {
   attractMode(); // Blink lights while waiting for user to press a button
-
+  
   // Indicate the start of game play
   setLEDs(CHOICE_RED | CHOICE_GREEN | CHOICE_BLUE | CHOICE_YELLOW); // Turn all LEDs on
   delay(1000);
@@ -249,12 +249,12 @@ void loop()
 
   instructions_memory();
 
-
+  
   if (gameMode == MODE_MEMORY)
   {
     // Play memory game and handle result
     byte result = play_memory();
-
+    
     if (result == GAME_WIN)
       play_winner(); // Player won, play winner tones
     else
@@ -274,80 +274,6 @@ void loop()
 
 // Play the regular memory game
 // Returns 0 if player loses, or 1 if player wins
-
-void printRound(byte gameRound)
-{
-  u8g2.firstPage();
-  do {
-    u8g2.setFont(FONT_HUGE);
-    center(gameRound);
-  } while (u8g2.nextPage());
-
-}
-
-void print_winner()
-{
-  u8g2.firstPage();
-  do {
-    u8g2.setFont(FONT_HUGE);
-    u8g2.setFontPosCenter();
-    center("HURRA!", 32);
-  } while (u8g2.nextPage());
-}
-
-void print_loser(byte reason)
-{
-  u8g2.firstPage();
-  do {
-    u8g2.setFont(FONT_HUGE);
-    u8g2.setFontPosCenter();
-    if (reason == GAME_WRONG_MOVE) {
-      center("Wrong move!", 32);
-    } else {
-      center("To Slow!", 32);
-    }
-
-  } while (u8g2.nextPage());
-}
-
-void instructions_memory()
-{
-
-  u8g2.firstPage();
-  do {
-    u8g2.setFont(FONT_TITLE);
-    center("- Instructions: -", 12);
-    u8g2.setFont(FONT_BODY);
-    center("Repeat shown sequence", 30);
-  } while (u8g2.nextPage());
-
-  delay(ENTRY_TIME_LIMIT);
-
-  u8g2.firstPage();
-  do {
-    u8g2.setFont(FONT_TITLE);
-    center("- Instructions: -", 12);
-    u8g2.setFont(FONT_BODY);
-    center("Wait no longer than", 30);
-    center("3 sec", 45);
-  } while (u8g2.nextPage());
-
-  delay(ENTRY_TIME_LIMIT);
-
-char buf[20];
-snprintf (buf, 20, "Manage %d in a row", ROUNDS_TO_WIN);
-
-  u8g2.firstPage();
-  do {
-    u8g2.setFont(FONT_TITLE);
-    center("- Instructions: -", 12);
-    u8g2.setFont(FONT_BODY);
-    center(buf, 30);
-    center("to win.", 45);
-  } while (u8g2.nextPage());
-
-  delay(ENTRY_TIME_LIMIT);
-}
 
 byte play_memory(void)
 {
@@ -555,7 +481,7 @@ void buzz_sound(int buzz_length_ms, int buzz_delay_us)
 void play_winner(void)
 {
   print_winner();
-
+  
   setLEDs(CHOICE_GREEN | CHOICE_BLUE);
   winner_sound();
   setLEDs(CHOICE_RED | CHOICE_YELLOW);
@@ -590,7 +516,7 @@ void winner_sound(void)
 void play_loser(byte reason)
 {
   print_loser(reason);
-
+  
   setLEDs(CHOICE_RED | CHOICE_GREEN);
   buzz_sound(255, 1500);
 
@@ -603,38 +529,12 @@ void play_loser(byte reason)
   setLEDs(CHOICE_BLUE | CHOICE_YELLOW);
   buzz_sound(255, 1500);
 }
-
-void center(const char *s, uint8_t y)
-{
-  uint8_t i = u8g2.getStrWidth(s);
-
-  u8g2.setCursor((128 - i) / 2, y);
-  u8g2.print(s);
-}
-
-void center(const byte value)
-{
-  uint8_t x = u8g2.getStrWidth("8") * ((int)log10(value)+1);
-
-  u8g2.setFontPosCenter();
-  u8g2.setCursor((128 - x) / 2, 32);
-  u8g2.print(value);
-}
-
 
 // Show an "attract mode" display while waiting for user to press button.
 void attractMode(void)
 {
 
-  u8g2.firstPage();
-  do {
-    u8g2.setFont(FONT_TITLE);
-    center("-= SiMoN =-", 12);
-
-    u8g2.setFont(FONT_BODY);
-    center("Push any button", 60);
-  } while (u8g2.nextPage());
-
+  print_title();
 
   while (1)
   {
