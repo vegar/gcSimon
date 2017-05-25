@@ -2,133 +2,14 @@
 #include <U8g2lib.h>
 #include <math.h> 
 #include <Servo.h>
-
-/*
-  SparkFun Inventor's Kit
-  Example sketch 16
-  Spark Fun Electronics
-  Oct. 7, 2014
-
-  Simon Says is a memory game. Start the game by pressing one of the four buttons. When a button lights up,
-  press the button, repeating the sequence. The sequence will get longer and longer. The game is won after
-  13 rounds.
-
-  Generates random sequence, plays music, and displays button lights.
-
-  Simon tones from Wikipedia
-  - A (red, upper left) - 440Hz - 2.272ms - 1.136ms pulse
-  - a (green, upper right, an octave higher than A) - 880Hz - 1.136ms,
-  0.568ms pulse
-  - D (blue, lower left, a perfect fourth higher than the upper left)
-  587.33Hz - 1.702ms - 0.851ms pulse
-  - G (yellow, lower right, a perfect fourth higher than the lower left) -
-  784Hz - 1.276ms - 0.638ms pulse
-
-  Simon Says game originally written in C for the PIC16F88.
-  Ported for the ATmega168, then ATmega328, then Arduino 1.0.
-  Fixes and cleanup by Joshua Neal <joshua[at]trochotron.com>
-
-  This sketch was written by SparkFun Electronics,
-  with lots of help from the Arduino community.
-  This code is completely free for any use.
-  Visit http://www.arduino.cc to learn about the Arduino.
-*/
+#include "display.h"
+#include "game.h"
+#include "sound.h"
 
 /*************************************************
   Public Constants
 *************************************************/
-U8G2_SSD1306_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, /* clock=*/ SCL, /* data=*/ SDA, /* reset=*/ U8X8_PIN_NONE);   // All Boards without Reset of the Display
 
-
-#define NOTE_B0 31
-#define NOTE_C1 33
-#define NOTE_CS1 35
-#define NOTE_D1 37
-#define NOTE_DS1 39
-#define NOTE_E1 41
-#define NOTE_F1 44
-#define NOTE_FS1 46
-#define NOTE_G1 49
-#define NOTE_GS1 52
-#define NOTE_A1 55
-#define NOTE_AS1 58
-#define NOTE_B1 62
-#define NOTE_C2 65
-#define NOTE_CS2 69
-#define NOTE_D2 73
-#define NOTE_DS2 78
-#define NOTE_E2 82
-#define NOTE_F2 87
-#define NOTE_FS2 93
-#define NOTE_G2 98
-#define NOTE_GS2 104
-#define NOTE_A2 110
-#define NOTE_AS2 117
-#define NOTE_B2 123
-#define NOTE_C3 131
-#define NOTE_CS3 139
-#define NOTE_D3 147
-#define NOTE_DS3 156
-#define NOTE_E3 165
-#define NOTE_F3 175
-#define NOTE_FS3 185
-#define NOTE_G3 196
-#define NOTE_GS3 208
-#define NOTE_A3 220
-#define NOTE_AS3 233
-#define NOTE_B3 247
-#define NOTE_C4 262
-#define NOTE_CS4 277
-#define NOTE_D4 294
-#define NOTE_DS4 311
-#define NOTE_E4 330
-#define NOTE_F4 349
-#define NOTE_FS4 370
-#define NOTE_G4 392
-#define NOTE_GS4 415
-#define NOTE_A4 440
-#define NOTE_AS4 466
-#define NOTE_B4 494
-#define NOTE_C5 523
-#define NOTE_CS5 554
-#define NOTE_D5 587
-#define NOTE_DS5 622
-#define NOTE_E5 659
-#define NOTE_F5 698
-#define NOTE_FS5 740
-#define NOTE_G5 784
-#define NOTE_GS5 831
-#define NOTE_A5 880
-#define NOTE_AS5 932
-#define NOTE_B5 988
-#define NOTE_C6 1047
-#define NOTE_CS6 1109
-#define NOTE_D6 1175
-#define NOTE_DS6 1245
-#define NOTE_E6 1319
-#define NOTE_F6 1397
-#define NOTE_FS6 1480
-#define NOTE_G6 1568
-#define NOTE_GS6 1661
-#define NOTE_A6 1760
-#define NOTE_AS6 1865
-#define NOTE_B6 1976
-#define NOTE_C7 2093
-#define NOTE_CS7 2217
-#define NOTE_D7 2349
-#define NOTE_DS7 2489
-#define NOTE_E7 2637
-#define NOTE_F7 2794
-#define NOTE_FS7 2960
-#define NOTE_G7 3136
-#define NOTE_GS7 3322
-#define NOTE_A7 3520
-#define NOTE_AS7 3729
-#define NOTE_B7 3951
-#define NOTE_C8 4186
-#define NOTE_CS8 4435
-#define NOTE_D8 4699
-#define NOTE_DS8 4978
 
 #define CHOICE_OFF      0 //Used to control LEDs
 #define CHOICE_NONE     0 //Used to check buttons
@@ -148,21 +29,9 @@ U8G2_SSD1306_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, /* clock=*/ SCL, /* data=*/ SD
 #define BUTTON_BLUE   5 //12
 #define BUTTON_YELLOW 6
 
-// Buzzer pin definitions
-#define BUZZER1 12 //4
-#define BUZZER2  7 //7
-
-// Define game parameters
-#define ROUNDS_TO_WIN      13 //Number of rounds to succesfully remember before you win. 13 is do-able.
-#define ENTRY_TIME_LIMIT   3000 //Amount of time to press a button before game times out. 3000ms = 3 sec
-
 #define MODE_MEMORY  0
 #define MODE_BATTLE  1
 #define MODE_BEEGEES 2
-
-#define GAME_TIMED_OUT -1
-#define GAME_WRONG_MOVE 0
-#define GAME_WIN 1
 
 // Game state variables
 byte gameMode = MODE_MEMORY; //By default, let's play the memory game
@@ -191,7 +60,8 @@ void setup()
   myservo.detach();
   
   //Setup hardware inputs/outputs. These pins are defined in the hardware_versions header file
-  u8g2.begin(BUTTON_RED, BUTTON_GREEN, BUTTON_BLUE, BUTTON_YELLOW);
+  //u8g2.begin(BUTTON_RED, BUTTON_GREEN, BUTTON_BLUE, BUTTON_YELLOW);
+  setupDisplay(BUTTON_RED, BUTTON_GREEN, BUTTON_BLUE, BUTTON_YELLOW);
 
   //Enable pull ups on inputs
   pinMode(BUTTON_RED, INPUT_PULLUP);
@@ -455,28 +325,6 @@ void toner(byte which, int buzz_length_ms)
   setLEDs(CHOICE_OFF); // Turn off all LEDs
 }
 
-// Toggle buzzer every buzz_delay_us, for a duration of buzz_length_ms.
-void buzz_sound(int buzz_length_ms, int buzz_delay_us)
-{
-  // Convert total play time from milliseconds to microseconds
-  long buzz_length_us = buzz_length_ms * (long)1000;
-
-  // Loop until the remaining play time is less than a single buzz_delay_us
-  while (buzz_length_us > (buzz_delay_us * 2))
-  {
-    buzz_length_us -= buzz_delay_us * 2; //Decrease the remaining play time
-
-    // Toggle the buzzer at various speeds
-    digitalWrite(BUZZER1, LOW);
-    digitalWrite(BUZZER2, HIGH);
-    delayMicroseconds(buzz_delay_us);
-
-    digitalWrite(BUZZER1, HIGH);
-    digitalWrite(BUZZER2, LOW);
-    delayMicroseconds(buzz_delay_us);
-  }
-}
-
 // Play the winner sound and lights
 void play_winner(void)
 {
@@ -490,26 +338,6 @@ void play_winner(void)
   winner_sound();
   setLEDs(CHOICE_RED | CHOICE_YELLOW);
   winner_sound();
-}
-
-// Play the winner sound
-// This is just a unique (annoying) sound we came up with, there is no magic to it
-void winner_sound(void)
-{
-  // Toggle the buzzer at various speeds
-  for (byte x = 250 ; x > 70 ; x--)
-  {
-    for (byte y = 0 ; y < 3 ; y++)
-    {
-      digitalWrite(BUZZER2, HIGH);
-      digitalWrite(BUZZER1, LOW);
-      delayMicroseconds(x);
-
-      digitalWrite(BUZZER2, LOW);
-      digitalWrite(BUZZER1, HIGH);
-      delayMicroseconds(x);
-    }
-  }
 }
 
 // Play the loser sound/lights

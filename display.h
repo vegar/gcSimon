@@ -1,7 +1,15 @@
+#include "game.h"
+
 #define FONT_TITLE u8g2_font_9x15_tf
 #define FONT_BODY u8g2_font_6x13_tf
 #define FONT_HUGE u8g2_font_courB24_tf
 
+U8G2_SSD1306_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, /* clock=*/ SCL, /* data=*/ SDA, /* reset=*/ U8X8_PIN_NONE);   // All Boards without Reset of the Display
+
+void setupDisplay(uint8_t menu_select_pin, uint8_t menu_next_pin, uint8_t menu_prev_pin, uint8_t menu_up_pin = U8X8_PIN_NONE, uint8_t menu_down_pin = U8X8_PIN_NONE, uint8_t menu_home_pin = U8X8_PIN_NONE)
+{
+    u8g2.begin(menu_select_pin, menu_next_pin, menu_prev_pin, menu_up_pin);
+}
 
 void center(const char *s, uint8_t y)
 {
@@ -18,19 +26,6 @@ void center(const byte value)
   u8g2.setFontPosCenter();
   u8g2.setCursor((128 - x) / 2, 32);
   u8g2.print(value);
-}
-
-void render_screens(){
-  print_winner();
-  delay(1000);
-  print_loser(GAME_TIMED_OUT);
-  delay(1000);
-  print_loser(GAME_WRONG_MOVE);
-  delay(1000);
-  printRound(1);
-  delay(1000);
-  instructions_memory();
-  delay(1000);
 }
 
 void print_title(){
@@ -134,3 +129,17 @@ void instructions_memory()
 
   delay(ENTRY_TIME_LIMIT);  
 }
+
+void render_screens(){
+  print_winner();
+  delay(1000);
+  print_loser(GAME_TIMED_OUT);
+  delay(1000);
+  print_loser(GAME_WRONG_MOVE);
+  delay(1000);
+  printRound(1);
+  delay(1000);
+  instructions_memory();
+  delay(1000);
+}
+
